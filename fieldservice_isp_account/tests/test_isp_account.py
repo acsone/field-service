@@ -3,27 +3,45 @@
 
 from odoo import fields
 from odoo.exceptions import ValidationError
+from odoo.tests import SavepointCase
 
-from odoo.addons.fieldservice_account.tests.test_fsm_account import FSMAccountCase
 
-
-class FSMAccountCase(FSMAccountCase):
-    def setUp(self):
-        super(FSMAccountCase, self).setUp()
-        self.test_person = self.env["fsm.person"].create({"name": "Worker-1"})
-        self.test_analytic = self.env.ref("analytic.analytic_administratif")
-        self.account_id = self.env["account.account"].create(
+class FSMISPAccountCase(SavepointCase):
+    @classmethod
+    def setUpClass(cls):
+        super(FSMISPAccountCase, cls).setUpClass()
+        cls.test_person = cls.env["fsm.person"].create({"name": "Worker-1"})
+        cls.test_analytic = cls.env.ref("analytic.analytic_administratif")
+        cls.account_id = cls.env["account.account"].create(
             {
                 "code": "NC1110",
                 "name": "Test Payable Account",
-                "user_type_id": self.env.ref("account.data_account_type_payable").id,
+                "user_type_id": cls.env.ref("account.data_account_type_payable").id,
                 "reconcile": True,
+            }
+        )
+        # create a Res Partner to be converted to FSM Location/Person
+        cls.test_loc_partner = cls.env["res.partner"].create(
+            {"name": "Test Loc Partner", "phone": "ABC", "email": "tlp@email.com"}
+        )
+        # create expected FSM Location to compare to converted FSM Location
+        cls.test_location = cls.env["fsm.location"].create(
+            {
+                "name": "Test Location",
+                "phone": "123",
+                "email": "tp@email.com",
+                "partner_id": cls.test_loc_partner.id,
+                "owner_id": cls.test_loc_partner.id,
+                "customer_id": cls.test_loc_partner.id,
             }
         )
 
     def _create_workorder(self, bill_to, contractors, timesheets):
         # Create a new work order
-        contractors = self.env["account.invoice.line"].create(contractors)
+        move = self.env["account.move"].create({"name": "contractor move"})
+        for contractor in contractors:
+            contractor.update({"move_id": move.id})
+        contractors = self.env["account.move.line"].create(contractors)
         timesheets = self.env["account.analytic.line"].create(timesheets)
 
         order = self.env["fsm.order"].create(

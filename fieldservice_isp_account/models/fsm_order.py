@@ -17,7 +17,7 @@ class FSMOrder(models.Model):
     _inherit = "fsm.order"
 
     contractor_cost_ids = fields.One2many(
-        "account.invoice.line", "fsm_order_id", string="Contractor Costs"
+        "account.move.line", "fsm_order_id", string="Contractor Costs"
     )
     employee_timesheet_ids = fields.One2many(
         "account.analytic.line", "fsm_order_id", string="Employee Timesheets"
@@ -38,6 +38,8 @@ class FSMOrder(models.Model):
         for order in self:
             if user.employee_ids:
                 order.employee = True
+            else:
+                order.employee = False
 
     @api.depends("employee_timesheet_ids", "contractor_cost_ids")
     def _compute_total_cost(self):
@@ -68,11 +70,11 @@ class FSMOrder(models.Model):
     def action_complete(self):
         for order in self:
             order.account_stage = "review"
-        if self.person_id.supplier and not self.contractor_cost_ids:
+        if self.person_id.supplier_rank and not self.contractor_cost_ids:
             raise ValidationError(
                 _("Cannot move to Complete " + "until 'Contractor Costs' is filled in")
             )
-        if not self.person_id.supplier and not self.employee_timesheet_ids:
+        if not self.person_id.supplier_rank and not self.employee_timesheet_ids:
             raise ValidationError(
                 _(
                     "Cannot move to Complete until "
@@ -84,7 +86,7 @@ class FSMOrder(models.Model):
     def create_bills(self):
         jrnl = self.env["account.journal"].search(
             [
-                ("company_id", "=", self.env.user.company_id.id),
+                ("company_id", "=", self.env.company_id.id),
                 ("type", "=", "purchase"),
                 ("active", "=", True),
             ],
@@ -97,9 +99,9 @@ class FSMOrder(models.Model):
             "journal_id": jrnl.id or False,
             "fiscal_position_id": fpos.id or False,
             "fsm_order_ids": [(4, self.id)],
-            "company_id": self.env.user.company_id.id,
+            "company_id": self.env.company_id.id,
         }
-        bill = self.env["account.invoice"].sudo().create(vals)
+        bill = self.env["account.move"].sudo().create(vals)
         for line in self.contractor_cost_ids:
             line.invoice_id = bill
         bill.compute_taxes()
@@ -121,7 +123,7 @@ class FSMOrder(models.Model):
     def account_create_invoice(self):
         jrnl = self.env["account.journal"].search(
             [
-                ("company_id", "=", self.env.user.company_id.id),
+                ("company_id", "=", self.env.company_id.id),
                 ("type", "=", "sale"),
                 ("active", "=", True),
             ],
@@ -138,7 +140,7 @@ class FSMOrder(models.Model):
                 "fiscal_position_id": fpos.id or False,
                 "fsm_order_ids": [(4, self.id)],
             }
-            invoice = self.env["account.invoice"].sudo().create(vals)
+            invoice = self.env["account.move"].sudo().create(vals)
             price_list = invoice.partner_id.property_product_pricelist
         else:
             fpos = self.location_id.customer_id.property_account_position_id
@@ -148,9 +150,9 @@ class FSMOrder(models.Model):
                 "journal_id": jrnl.id or False,
                 "fiscal_position_id": fpos.id or False,
                 "fsm_order_ids": [(4, self.id)],
-                "company_id": self.env.user.company_id.id,
+                "company_id": self.env.company_id.id,
             }
-            invoice = self.env["account.invoice"].sudo().create(vals)
+            invoice = self.env["account.move"].sudo().create(vals)
             price_list = invoice.partner_id.property_product_pricelist
         for cost in self.contractor_cost_ids:
             price = price_list.get_product_price(
@@ -173,9 +175,9 @@ class FSMOrder(models.Model):
                 "invoice_id": invoice.id,
                 "fsm_order_id": self.id,
             }
-            con_cost = self.env["account.invoice.line"].create(vals)
+            con_cost = self.env["account.move.line"].create(vals)
             taxes = template.taxes_id
-            con_cost.invoice_line_tax_ids = fpos.map_tax(taxes)
+            con_cost.tax_ids = fpos.map_tax(taxes)
         for line in self.employee_timesheet_ids:
             price = price_list.get_product_price(
                 product=line.product_id,
@@ -197,9 +199,9 @@ class FSMOrder(models.Model):
                 "invoice_id": invoice.id,
                 "fsm_order_id": self.id,
             }
-            time_cost = self.env["account.invoice.line"].create(vals)
+            time_cost = self.env["account.move.line"].create(vals)
             taxes = template.taxes_id
-            time_cost.invoice_line_tax_ids = fpos.map_tax(taxes)
+            time_cost.tax_ids = fpos.map_tax(taxes)
         invoice.compute_taxes()
         self.account_stage = "invoiced"
         return invoice
