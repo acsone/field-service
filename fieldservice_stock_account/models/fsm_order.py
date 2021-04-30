@@ -41,7 +41,7 @@ class FSMOrder(models.Model):
         ):
             jrnl = self.env["account.journal"].search(
                 [
-                    ("company_id", "=", self.env.user.company_id.id),
+                    ("company_id", "=", self.env.company_id.id),
                     ("type", "=", "sale"),
                     ("active", "=", True),
                 ],
