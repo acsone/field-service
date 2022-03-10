@@ -15,7 +15,7 @@
         "views/product_template.xml",
         "views/res_branch.xml",
         "views/sale_order.xml",
-        "views/res_config_settings.xml",
+        # "views/res_config_settings.xml",
     ],
     "license": "AGPL-3",
     "development_status": "Beta",
