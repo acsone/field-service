@@ -47,7 +47,7 @@ class SaleOrderLine(models.Model):
             qty = 0
             if line.fsm_order_id.stage_id == complete:
                 qty = line.product_uom_qty
-                line.qty_delivered = qty
+            line.qty_delivered = qty
 
     @api.model
     def create(self, values):
